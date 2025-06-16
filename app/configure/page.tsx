@@ -9,8 +9,7 @@ import { Footer } from "@/components/footer"
 import { ProcessingScreen } from "@/components/processing-screen"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { storageService, UploadedFile } from "@/lib/storage-service"
-import { apiService } from "@/lib/api-service"
+import { pureMinIOService, MinIOFile, MinIOProcessingResult } from "@/lib/pure-minio-service"
 
 interface ObjectSettings {
   blastRig: boolean
@@ -21,7 +20,7 @@ interface ObjectSettings {
 
 export default function ConfigurePage() {
   const router = useRouter()
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<MinIOFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedObjects, setSelectedObjects] = useState<Record<string, boolean>>({
@@ -34,7 +33,7 @@ export default function ConfigurePage() {
   useEffect(() => {
     const loadFiles = async () => {
       try {
-        const files = await storageService.getFiles();
+        const files = await pureMinIOService.getFiles();
         if (!files || files.length === 0) {
           router.push('/');
           return;
@@ -45,7 +44,7 @@ export default function ConfigurePage() {
         console.error('Error loading files:', error);
         setError('Failed to load uploaded files. Please try uploading again.');
         // Clear invalid data
-        await storageService.clearFiles();
+        pureMinIOService.clearAll();
         router.push('/');
       }
     };
@@ -69,62 +68,26 @@ export default function ConfigurePage() {
         throw new Error("Please select at least one object type to detect");
       }
 
-      // Process each file
-      const results = await Promise.all(
+      console.log('Processing files with MinIO:', {
+        fileCount: uploadedFiles.length,
+        selectedTypes
+      });
+
+      // Process each file using pure MinIO service
+      const results: MinIOProcessingResult[] = await Promise.all(
         uploadedFiles.map(async (file) => {
           try {
-            let fileObj: File;
-
-            if (file.type === "video") {
-              // For videos, get the blob directly from IndexedDB
-              const videoBlob = await storageService.getVideo(file.id);
-              if (!videoBlob) {
-                throw new Error(`Video not found in storage: ${file.file.name}`);
-              }
-              fileObj = new File([videoBlob], file.file.name, {
-                type: file.file.type,
-                lastModified: file.file.lastModified,
-              });
-            } else {
-              // For images, convert base64 to Blob
-              const base64Data = file.file.data.split(',')[1];
-              const byteCharacters = atob(base64Data);
-              const byteArrays = [];
-              for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                const slice = byteCharacters.slice(offset, offset + 512);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {
-                  byteNumbers[i] = slice.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                byteArrays.push(byteArray);
-              }
-              const blob = new Blob(byteArrays, { type: file.file.type });
-              fileObj = new File([blob], file.file.name, {
-                type: file.file.type,
-                lastModified: file.file.lastModified,
-              });
-            }
-
-            const result = await apiService.processFile(fileObj, selectedTypes);
-            return {
-              fileId: file.id,
-              result: {
-                url: result.url,
-                timestamp: new Date().toISOString(),
-                objectTypes: selectedTypes,
-                type: file.type
-              }
-            };
+            console.log(`Processing file: ${file.fileName}`);
+            return await pureMinIOService.processFile(file, selectedTypes);
           } catch (error) {
-            console.error(`Error processing file ${file.file.name}:`, error);
-            throw new Error(`Failed to process ${file.file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(`Error processing file ${file.fileName}:`, error);
+            throw new Error(`Failed to process ${file.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         })
       );
 
       // Store results
-      await storageService.saveResults(results);
+      pureMinIOService.saveResults(results);
 
       // Navigate to results page
       router.push('/results');
@@ -168,12 +131,16 @@ export default function ConfigurePage() {
                     <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                       {file.type === "image" ? (
                         <img
-                          src={file.url || "/placeholder.svg"}
+                          src={`/api/storage/download?bucket=${file.bucketName}&object=${file.objectName}`}
                           alt="Uploaded"
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <video src={file.url} className="w-full h-full object-cover" muted />
+                        <video 
+                          src={`/api/storage/download?bucket=${file.bucketName}&object=${file.objectName}`} 
+                          className="w-full h-full object-cover" 
+                          muted 
+                        />
                       )}
                     </div>
                   </div>

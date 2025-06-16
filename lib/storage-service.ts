@@ -1,3 +1,5 @@
+import { openDatabase, VIDEO_STORE } from './indexeddb';
+
 export interface UploadedFile {
   id: string
   file: {
@@ -64,6 +66,59 @@ class StorageService {
     })
   }
 
+  private async backupToMinIO(file: File, fileId: string): Promise<string | null> {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bucket', 'sitesense-uploads')
+      
+      const response = await fetch('/api/storage/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        console.error('Failed to backup to MinIO:', response.statusText)
+        return null
+      }
+
+      const result = await response.json()
+      console.log('File backed up to MinIO:', result.url)
+      return result.url
+    } catch (error) {
+      console.error('MinIO backup error:', error)
+      return null
+    }
+  }
+
+  private async backupProcessedToMinIO(blob: Blob, originalFileId: string, type: string): Promise<string | null> {
+    try {
+      const fileName = `processed-${Date.now()}-${originalFileId}.${type === 'image' ? 'jpg' : 'mp4'}`
+      const file = new File([blob], fileName, { type: blob.type })
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bucket', 'sitesense-processed')
+      
+      const response = await fetch('/api/storage/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        console.error('Failed to backup processed file to MinIO:', response.statusText)
+        return null
+      }
+
+      const result = await response.json()
+      console.log('Processed file backed up to MinIO:', result.url)
+      return result.url
+    } catch (error) {
+      console.error('MinIO processed backup error:', error)
+      return null
+    }
+  }
+
   async saveFiles(files: UploadedFile[]): Promise<void> {
     console.log('Saving files to IndexedDB:', {
       count: files.length,
@@ -73,27 +128,53 @@ class StorageService {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.STORE_NAME, 'readwrite');
+    try {
+      console.log('Saving files to IndexedDB...');
+      const transaction = this.db!.transaction([this.STORE_NAME], 'readwrite');
       const store = transaction.objectStore(this.STORE_NAME);
-
-      // Clear existing files
-      store.clear();
-
-      // Add new files
-      files.forEach((file) => {
-        store.add(file);
+      
+      // Save to IndexedDB and backup to MinIO in parallel
+      await Promise.all(files.map(async (file) => {
+        await store.put(file);
+        
+        // Convert base64 back to File for MinIO backup
+        if (file.file.data && file.type === 'image') {
+          try {
+            const base64Data = file.file.data.split(',')[1];
+            const byteCharacters = atob(base64Data);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+              const slice = byteCharacters.slice(offset, offset + 512);
+              const byteNumbers = new Array(slice.length);
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              byteArrays.push(byteArray);
+            }
+            const blob = new Blob(byteArrays, { type: file.file.type });
+            const fileObj = new File([blob], file.file.name, {
+              type: file.file.type,
+              lastModified: file.file.lastModified,
+            });
+            
+            // Backup to MinIO (non-blocking)
+            this.backupToMinIO(fileObj, file.id);
+          } catch (error) {
+            console.warn('Failed to backup image to MinIO:', error);
+          }
+        }
+      }));
+      
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
       });
-
-      transaction.oncomplete = () => {
-        console.log('Files saved successfully');
-        resolve();
-      };
-      transaction.onerror = () => {
-        console.error('Error saving files:', transaction.error);
-        reject(transaction.error);
-      };
-    });
+      console.log('Files saved to IndexedDB successfully');
+    } catch (error) {
+      console.error('Error saving files to IndexedDB:', error);
+      throw error;
+    }
   }
 
   async getFiles(): Promise<UploadedFile[]> {
@@ -129,27 +210,41 @@ class StorageService {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.RESULTS_STORE, 'readwrite');
+    try {
+      await this.init();
+      console.log('Saving results to IndexedDB...');
+      
+      const transaction = this.db!.transaction([this.RESULTS_STORE], 'readwrite');
       const store = transaction.objectStore(this.RESULTS_STORE);
-
-      // Clear existing results
-      store.clear();
-
-      // Add new results
-      results.forEach((result) => {
-        store.add(result);
+      
+      await Promise.all(results.map(async (result) => {
+        await store.put(result);
+        
+        // Backup processed file to MinIO if it's a blob URL
+        if (result.result.url.startsWith('blob:')) {
+          try {
+            const response = await fetch(result.result.url);
+            if (response.ok) {
+              const blob = await response.blob();
+              this.backupProcessedToMinIO(blob, result.fileId, result.result.type);
+            }
+          } catch (error) {
+            console.warn('Failed to backup processed file to MinIO:', error);
+          }
+        }
+      }));
+      
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => {
+          console.log('Results saved to IndexedDB successfully');
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
       });
-
-      transaction.oncomplete = () => {
-        console.log('Results saved successfully');
-        resolve();
-      };
-      transaction.onerror = () => {
-        console.error('Error saving results:', transaction.error);
-        reject(transaction.error);
-      };
-    });
+    } catch (error) {
+      console.error('Error saving results to IndexedDB:', error);
+      throw error;
+    }
   }
 
   async getResults(): Promise<ProcessingResult[]> {
@@ -259,4 +354,47 @@ class StorageService {
   }
 }
 
-export const storageService = new StorageService(); 
+export const storageService = new StorageService();
+
+export async function verifyVideoInIndexedDB(fileId: string): Promise<{
+  exists: boolean;
+  size: number;
+  type: string;
+  error?: string;
+}> {
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction(VIDEO_STORE, 'readonly');
+    const store = tx.objectStore(VIDEO_STORE);
+    const video = await store.get(fileId);
+
+    if (!video) {
+      return { exists: false, size: 0, type: '' };
+    }
+
+    // Verify the blob is valid
+    const blob = video.blob;
+    if (!(blob instanceof Blob)) {
+      return { 
+        exists: true, 
+        size: 0, 
+        type: '', 
+        error: 'Invalid blob data in IndexedDB' 
+      };
+    }
+
+    return {
+      exists: true,
+      size: blob.size,
+      type: blob.type
+    };
+  } catch (error) {
+    console.error('Error verifying video in IndexedDB:', error);
+    return { 
+      exists: false, 
+      size: 0, 
+      type: '', 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}

@@ -9,20 +9,10 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { storageService } from "@/lib/storage-service"
-import { apiService } from "@/lib/api-service"
+import { pureMinIOService, MinIOFile } from "@/lib/pure-minio-service"
 
-interface UploadedFile {
-  id: string
-  file: {
-    name: string
-    type: string
-    size: number
-    lastModified: number
-    data: string
-  }
-  url: string
-  type: "image" | "video"
+interface UploadedFile extends MinIOFile {
+  // Use MinIOFile interface
 }
 
 export default function HomePage() {
@@ -84,57 +74,10 @@ export default function HomePage() {
       }, 200)
 
       try {
-        const newFiles: UploadedFile[] = await Promise.all(
-          fileArray.map(async (file, index) => {
-            const fileId = `file-${Date.now()}-${index}`;
-            const isVideo = file.type.startsWith('video/');
-            
-            // For videos, we'll store them in IndexedDB directly
-            if (isVideo) {
-              await storageService.saveVideo(fileId, file);
-              return {
-                id: fileId,
-                file: {
-                  name: file.name,
-                  type: file.type,
-                  size: file.size,
-                  lastModified: file.lastModified,
-                  data: '' // We don't need to store video data in base64
-                },
-                url: URL.createObjectURL(file),
-                type: 'video'
-              };
-            }
-            
-            // For images, convert to base64
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64String = reader.result as string;
-                resolve(base64String);
-              };
-              reader.readAsDataURL(file);
-            });
-
-            return {
-              id: fileId,
-              file: {
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                lastModified: file.lastModified,
-                data: base64
-              },
-              url: URL.createObjectURL(file),
-              type: 'image'
-            };
-          })
-        );
-
-        // Store files in IndexedDB
-        await storageService.saveFiles(newFiles);
-
-        setUploadedFiles(newFiles);
+        // Upload files directly to MinIO
+        const uploadedFiles = await pureMinIOService.uploadFiles(fileArray);
+        
+        setUploadedFiles(uploadedFiles);
         setIsUploading(false);
         setUploadProgress(0);
         
@@ -142,7 +85,7 @@ export default function HomePage() {
         router.push('/configure');
       } catch (error) {
         console.error('Error processing files:', error);
-        setAlertMessage("Error processing files. Please try again.");
+        setAlertMessage("Error uploading files to storage. Please try again.");
         setShowAlert(true);
         setIsUploading(false);
         setUploadProgress(0);
