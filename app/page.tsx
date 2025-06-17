@@ -25,8 +25,8 @@ export default function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const MAX_FILES = 10
-  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
-  const MAX_TOTAL_SIZE = 50 * 1024 * 1024 // 50MB total
+  // const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file - REMOVED
+  const MAX_TOTAL_SIZE = 500 * 1024 * 1024 // 500MB total
 
   const handleFileSelect = useCallback(
     async (files: FileList) => {
@@ -36,25 +36,17 @@ export default function HomePage() {
 
       // Check file count limit
       if (uploadedFiles.length + fileArray.length > MAX_FILES) {
-        setAlertMessage("Cannot upload more than 10 images!")
+        setAlertMessage("Cannot upload more than 10 files!")
         setShowAlert(true)
         setTimeout(() => setShowAlert(false), 5000)
         return
       }
 
-      // Check individual file size
-      const oversizedFiles = fileArray.filter(file => file.size > MAX_FILE_SIZE);
-      if (oversizedFiles.length > 0) {
-        setAlertMessage(`Files exceeding 10MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`);
-        setShowAlert(true);
-        setTimeout(() => setShowAlert(false), 5000);
-        return;
-      }
-
-      // Check total size
-      const totalSize = fileArray.reduce((acc, file) => acc + file.size, 0);
-      if (totalSize > MAX_TOTAL_SIZE) {
-        setAlertMessage("Total upload size cannot exceed 50MB!");
+      // Check total size (including existing files)
+      const currentTotalSize = uploadedFiles.reduce((acc, file) => acc + file.fileSize, 0);
+      const newFilesTotalSize = fileArray.reduce((acc, file) => acc + file.size, 0);
+      if (currentTotalSize + newFilesTotalSize > MAX_TOTAL_SIZE) {
+        setAlertMessage("Total upload size cannot exceed 500MB!");
         setShowAlert(true);
         setTimeout(() => setShowAlert(false), 5000);
         return;

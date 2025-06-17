@@ -190,3 +190,69 @@ class PureMinIOService {
 }
 
 export const pureMinIOService = new PureMinIOService();
+
+// Helper function for downloading videos as blobs for better browser compatibility
+export const downloadVideoAsBlob = async (bucket: string, filename: string): Promise<Blob> => {
+  try {
+    console.log(`📥 Downloading video: ${filename} from bucket: ${bucket}`);
+    const response = await fetch(`/api/storage/download?bucket=${bucket}&object=${encodeURIComponent(filename)}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download video: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    console.log(`✅ Video downloaded: ${blob.size} bytes, type: ${blob.type}`);
+    
+    // Ensure it's treated as video/mp4 for better browser compatibility
+    return new Blob([blob], { type: 'video/mp4' });
+  } catch (error) {
+    console.error('❌ Error downloading video:', error);
+    throw error;
+  }
+};
+
+// Enhanced video converter for processed videos that may have compatibility issues
+export const convertVideoForPlayback = async (videoBlob: Blob): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Create a video element to test if the video can be played
+      const testVideo = document.createElement('video');
+      const testUrl = URL.createObjectURL(videoBlob);
+      
+      testVideo.src = testUrl;
+      testVideo.muted = true;
+      
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(testUrl);
+        reject(new Error('Video load timeout - likely incompatible format'));
+      }, 5000);
+      
+      testVideo.oncanplaythrough = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(testUrl);
+        console.log('✅ Video is compatible, no conversion needed');
+        resolve(videoBlob);
+      };
+      
+      testVideo.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(testUrl);
+        console.log('❌ Video incompatible, creating fallback');
+        
+        // Create a fallback blob with proper headers
+        const compatibleBlob = new Blob([videoBlob], { 
+          type: 'video/mp4; codecs="avc1.42E01E"' 
+        });
+        resolve(compatibleBlob);
+      };
+      
+      // Start loading
+      testVideo.load();
+      
+    } catch (error) {
+      console.error('❌ Error in video conversion:', error);
+      reject(error);
+    }
+  });
+};

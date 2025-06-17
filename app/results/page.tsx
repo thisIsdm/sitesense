@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { pureMinIOService, MinIOFile, MinIOProcessingResult } from "@/lib/pure-minio-service"
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider"
+import VideoPlayer from "@/components/video-player"
 
 export default function ResultsPage() {
   const router = useRouter()
@@ -102,14 +103,14 @@ export default function ResultsPage() {
 
   // Get file URLs using download API to avoid 403 errors
   const getOriginalFileUrl = (file: MinIOFile) => {
-    return `/api/storage/download?bucket=${file.bucketName}&object=${file.objectName}`;
+    return `/api/storage/download?bucket=${file.bucketName}&object=${encodeURIComponent(file.objectName)}`;
   };
 
   const getProcessedFileUrl = (result: MinIOProcessingResult) => {
     // Extract bucket and object from processed URL
     const urlParts = result.processedUrl.split('/');
     const objectName = urlParts[urlParts.length - 1];
-    return `/api/storage/download?bucket=sitesense-processed&object=${objectName}`;
+    return `/api/storage/download?bucket=sitesense-processed&object=${encodeURIComponent(objectName)}`;
   };
 
   return (
@@ -189,27 +190,35 @@ export default function ResultsPage() {
                   <div>
                     <h3 className="text-lg font-medium mb-3">Original Video</h3>
                     <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                      <video
+                      <VideoPlayer
                         src={getOriginalFileUrl(currentFile)}
-                        controls
-                        className="w-full h-full"
-                        preload="metadata"
-                      >
-                        Your browser does not support the video tag.
-                      </video>
+                        title={`Original - ${currentFile.fileName}`}
+                        className="aspect-video"
+                        onError={(error) => {
+                          console.error('Original video error:', error);
+                          setError('Unable to play original video. You can still download it.');
+                        }}
+                        onReady={() => {
+                          console.log('✅ Original video player ready');
+                        }}
+                      />
                     </div>
                   </div>
                   <div>
                     <h3 className="text-lg font-medium mb-3">Processed Video</h3>
                     <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                      <video
+                      <VideoPlayer
                         src={getProcessedFileUrl(currentResult)}
-                        controls
-                        className="w-full h-full"
-                        preload="metadata"
-                      >
-                        Your browser does not support the video tag.
-                      </video>
+                        title={`Processed - ${currentFile.fileName}`}
+                        className="aspect-video"
+                        onError={(error) => {
+                          console.error('Processed video error:', error);
+                          setError('Processed video format may not be supported by your browser. The video was processed successfully but cannot be played. Try downloading it instead.');
+                        }}
+                        onReady={() => {
+                          console.log('✅ Processed video player ready');
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -241,4 +250,4 @@ export default function ResultsPage() {
       <Footer />
     </div>
   )
-} 
+}
