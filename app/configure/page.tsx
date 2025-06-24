@@ -155,8 +155,8 @@ export default function ConfigurePage() {
                     src="/select.svg"
                     alt="Select Object"
                     width={120}
-                    height={40}
-                    className="object-contain"
+                    height={140}
+                    className="object-contain mx-auto w-full"
                   />
                 </div>
                 <p className="text-gray-600 text-sm mb-6">Enable or Disable the objects you want to annotate</p>
@@ -215,4 +215,4 @@ export default function ConfigurePage() {
       <Footer />
     </div>
   )
-} 
+}
