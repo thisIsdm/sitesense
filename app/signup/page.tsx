@@ -2,10 +2,17 @@
 
 import { Header } from "@/components/header";
 import { Eye, EyeClosed } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+import { authClient } from "@/lib/auth-client";
 
 export default function SignUpPage() {
     const [passwordShown, setPasswordShown] = useState(false);
+
+    const emailRef = useRef<HTMLInputElement>(null);
+    const passwordRef = useRef<HTMLInputElement>(null);
+    const firstNameRef = useRef<HTMLInputElement>(null);
+    const lastNameRef = useRef<HTMLInputElement>(null);
 
     return (
         <div className="flex flex-col p-[2.5rem] gap-[3.75rem]">
@@ -307,6 +314,8 @@ export default function SignUpPage() {
                                     placeholder="First Name"
                                     name="firstName"
                                     className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036]"
+                                    ref={firstNameRef}
+                                    required
                                 />
                             </div>
                             <div className="flex flex-col gap-[0.5rem]">
@@ -317,7 +326,9 @@ export default function SignUpPage() {
                                 <input
                                     name="lastName"
                                     placeholder="Last Name"
+                                    ref={lastNameRef}
                                     className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036]"
+                                    required
                                 />
                             </div>
                         </div>
@@ -330,6 +341,8 @@ export default function SignUpPage() {
                                 name="email"
                                 placeholder="Email"
                                 className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036]"
+                                ref={emailRef}
+                                required
                             />
                         </div>
                         <div className="flex flex-col gap-[0.5rem]">
@@ -343,6 +356,8 @@ export default function SignUpPage() {
                                     placeholder="Password"
                                     type={passwordShown ? "text" : "password"}
                                     className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036] w-full pr-[calc(0.75rem+2rem)]"
+                                    ref={passwordRef}
+                                    required
                                 />
                                 <button
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2"
@@ -355,7 +370,24 @@ export default function SignUpPage() {
                                 </button>
                             </div>
                         </div>
-                        <button className="p-[1rem] bg-[#AE4B4B] font-medium text-white rounded-[1rem]">
+                        <button
+                            className="p-[1rem] bg-[#AE4B4B] font-medium text-white rounded-[1rem]"
+                            onClick={async (e) => {
+                                e.preventDefault();
+
+                                const { data, error } =
+                                    await authClient.signUp.email({
+                                        email: emailRef.current?.value ?? "",
+                                        password:
+                                            passwordRef.current?.value ?? "",
+                                        name: `${
+                                            firstNameRef.current?.value ?? ""
+                                        } ${lastNameRef.current?.value ?? ""}`,
+                                    });
+
+                                console.log(data, error);
+                            }}
+                        >
                             Sign Up
                         </button>
                     </form>

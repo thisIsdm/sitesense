@@ -1,11 +1,17 @@
 "use client";
 
 import { Header } from "@/components/header";
+import { authClient } from "@/lib/auth-client";
 import { Eye, EyeClosed } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SignInPage() {
     const [passwordShown, setPasswordShown] = useState(false);
+    useEffect(() => {
+        (async () => {
+            console.log(await authClient.getSession());
+        })();
+    }, []);
 
     return (
         <div className="flex flex-col p-[2.5rem] gap-[3.75rem]">
