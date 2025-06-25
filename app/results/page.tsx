@@ -162,11 +162,11 @@ export default function ResultsPage() {
                     {/* Results Display */}
                     <div
                         className={`${
-                            videoMode ? "grid-cols-1" : "grid-cols-2"
+                            videoMode ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
                         } grid gap-8`}
                     >
                         {!videoMode && (
-                            <div className="bg-white rounded-lg p-6 border grid grid-cols-3 gap-4">
+                            <div className="bg-white rounded-lg p-6 border grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {results.map((result, index) => (
                                     <button
                                         className="bg-[#F3F3F3] p-2 aspect-square rounded-lg"
