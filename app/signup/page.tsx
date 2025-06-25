@@ -2,9 +2,11 @@
 
 import { Header } from "@/components/header";
 import { Eye, EyeClosed } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/router";
+import Link from "next/link";
 
 export default function SignUpPage() {
     const [passwordShown, setPasswordShown] = useState(false);
@@ -13,6 +15,7 @@ export default function SignUpPage() {
     const passwordRef = useRef<HTMLInputElement>(null);
     const firstNameRef = useRef<HTMLInputElement>(null);
     const lastNameRef = useRef<HTMLInputElement>(null);
+    const [error, setError] = useState<string | null>(null);
 
     return (
         <div className="flex flex-col p-[2.5rem] gap-[3.75rem]">
@@ -303,6 +306,9 @@ export default function SignUpPage() {
                             Enter your details to proceed further
                         </div>
                     </div>
+                    {error && (
+                        <div className="text-red-500 text-center">{error}</div>
+                    )}
                     <form className="flex flex-col gap-[1.5rem]">
                         <div className="grid grid-cols-2 gap-[0.75rem]">
                             <div className="flex flex-col gap-[0.5rem]">
@@ -385,12 +391,28 @@ export default function SignUpPage() {
                                         } ${lastNameRef.current?.value ?? ""}`,
                                     });
 
-                                console.log(data, error);
+                                if (data !== null) {
+                                    window.location.href = "/";
+                                } else {
+                                    setError(
+                                        error?.message ??
+                                            "An unknown error occurred"
+                                    );
+                                }
                             }}
                         >
                             Sign Up
                         </button>
                     </form>
+                    <div className="flex gap-[0.5rem] self-center items-center">
+                        Already have an account?{" "}
+                        <Link
+                            href="/signin"
+                            className="text-[#AE4B4B] font-medium"
+                        >
+                            Log in
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

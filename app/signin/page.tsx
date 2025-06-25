@@ -3,7 +3,8 @@
 import { Header } from "@/components/header";
 import { authClient } from "@/lib/auth-client";
 import { Eye, EyeClosed } from "lucide-react";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 export default function SignInPage() {
     const [passwordShown, setPasswordShown] = useState(false);
@@ -12,6 +13,10 @@ export default function SignInPage() {
             console.log(await authClient.getSession());
         })();
     }, []);
+
+    const emailRef = useRef<any>(null);
+    const passwordRef = useRef<any>(null);
+    const [error, setError] = useState<string | null>(null);
 
     return (
         <div className="flex flex-col p-[2.5rem] gap-[3.75rem]">
@@ -302,6 +307,11 @@ export default function SignInPage() {
                             Enter your details to proceed further
                         </div>
                     </div>
+                    {error && (
+                        <div className="text-[#F0648C] text-[1.25rem] font-medium">
+                            {error}
+                        </div>
+                    )}
                     <form className="flex flex-col gap-[1.5rem]">
                         <div className="flex flex-col gap-[0.5rem]">
                             <div>
@@ -312,6 +322,7 @@ export default function SignInPage() {
                                 name="email"
                                 placeholder="Email"
                                 className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036]"
+                                ref={emailRef}
                             />
                         </div>
                         <div className="flex flex-col gap-[0.5rem]">
@@ -325,6 +336,7 @@ export default function SignInPage() {
                                     placeholder="Password"
                                     type={passwordShown ? "text" : "password"}
                                     className="min-h-[3.25rem] bg-transparent border rounded-[0.625rem] p-[0.75rem] focus:outline-none focus:border-[#000000] border-[#00000036] w-full pr-[calc(0.75rem+2rem)]"
+                                    ref={passwordRef}
                                 />
                                 <button
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2"
@@ -337,10 +349,38 @@ export default function SignInPage() {
                                 </button>
                             </div>
                         </div>
-                        <button className="p-[1rem] bg-[#AE4B4B] font-medium text-white rounded-[1rem]">
+                        <button
+                            className="p-[1rem] bg-[#AE4B4B] font-medium text-white rounded-[1rem]"
+                            onClick={async (e) => {
+                                e.preventDefault();
+                                const { data, error } =
+                                    await authClient.signIn.email({
+                                        email: emailRef.current?.value ?? "",
+                                        password: passwordRef.current?.value ?? "",
+                                    })
+
+                                if (data !== null) {
+                                    window.location.href = "/";
+                                } else {
+                                    setError(
+                                        error?.message ??
+                                            "An unknown error occurred"
+                                    );
+                                }
+                            }}
+                        >
                             Sign In
                         </button>
                     </form>
+                    <div className="flex gap-[0.5rem] self-center items-center">
+                        Don't have an account?{" "}
+                        <Link
+                            href="/signup"
+                            className="text-[#AE4B4B] font-medium"
+                        >
+                            Sign up
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>
